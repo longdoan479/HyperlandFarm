@@ -5,14 +5,15 @@ import random
 from Include.FileProcessing import FileProcessing
 import CONSTANT as Cons
 from IncludeAsync.AsyncTaskQueue import AsyncTaskQueue
+from IncludeAsync.Database.AsyncPostgresClient import AsyncPostgresClient
 from ThreadTask.AsyncDoTask import AsyncDoTask
 
 
 
 # Hàm khởi chạy tất cả các tác vụ không đồng bộ
 async def main():
-    # l_FileProxy = FileProcessing("proxy.xlsx")
-    # Cons.g_Data_Proxy = l_FileProxy.ReadDataProxyJSON()
+    DB_URL = "postgresql+asyncpg://postgres:long123@localhost/HyperlandFarm"
+    l_db = AsyncPostgresClient(DB_URL)
 
     l_FileKey = FileProcessing("key/key.xlsx")
     # l_FileKey2 = FileProcessing("key/2.xlsx")
@@ -40,7 +41,7 @@ async def main():
         random.shuffle(l_lstAccountFilter)
         groups_Account[group].extend(l_lstAccountFilter)
 
-    l_randomThreadNumber = random.randint(10, 13)
+    l_randomThreadNumber = random.randint(3, 4)
 
     # Chia các nhóm thành 5 mảng
     l_Results = [[] for _ in range(l_randomThreadNumber)]
@@ -56,7 +57,7 @@ async def main():
 
     # Thêm 20 tác vụ vào hàng đợi
     for i in range(0, l_randomThreadNumber):
-        task_obj = AsyncDoTask(f"Task {i}", l_Results[i])  # Khởi tạo đối tượng AsyncDoTask
+        task_obj = AsyncDoTask(f"Task {i}", l_Results[i], l_db)  # Khởi tạo đối tượng AsyncDoTask
         task_queue.add_task(task_obj)  # Thêm tác vụ vào hàng đợi
         await asyncio.sleep(0.1)  # Giả lập việc thêm tác vụ theo thời gian thực
 
