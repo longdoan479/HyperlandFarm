@@ -35,7 +35,7 @@ class TaskBridgeETH_UseNexus(ConnectWeb3):
             l_AmountToBridge = round((l_BalanceETH - 0.0004) / (random.uniform(1.04, 1.06)),
                                      random.randint(5,7))
 
-            l_TxnBridge, l_IsSuccessTXN, l_QuoteGasPayment = await l_UseNexus.BridgeETH(
+            l_TxnBridge, l_IsSuccessTXN, l_QuoteGasPayment, l_TxnFee = await l_UseNexus.BridgeETH(
                 l_AmountToBridge,
                 pChainID_To,
                 self.mAccountEVM.GetAddress(),
@@ -46,14 +46,14 @@ class TaskBridgeETH_UseNexus(ConnectWeb3):
                 async for session in self.mDatabaseConn.get_session():
                     l_WalletsRepo = WalletsRepository(session)
                     await l_WalletsRepo.upsert_wallet_stats(self.mAccountEVM.GetAddress(),
-                                                                self.mWeb3.from_wei(l_GasPrice, "gwei"),
+                                                                self.mWeb3.from_wei(l_TxnFee, "ether"),
                                                                 decimal.Decimal(l_AmountToBridge),
                                                                 self.mWeb3.from_wei(l_QuoteGasPayment, "ether"))
 
                     l_TransactionRepo = TransactionRepository(session)
                     await l_TransactionRepo.upsert_transaction_stats(l_TxnBridge,
                                                                     self.mAccountEVM.GetAddress(),
-                                                                     self.mWeb3.from_wei(l_GasPrice, "gwei"),
+                                                                     self.mWeb3.from_wei(l_GasPrice, "ether"),
                                                                      decimal.Decimal(l_AmountToBridge),
                                                                      self.mWeb3.from_wei(l_QuoteGasPayment, "ether"),
                                                                      await self.GetChainID())
