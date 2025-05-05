@@ -12,7 +12,7 @@ from ThreadTask.AsyncDoTask import AsyncDoTask
 
 # Hàm khởi chạy tất cả các tác vụ không đồng bộ
 async def main():
-    DB_URL = "postgresql+asyncpg://postgres:long123@localhost/HyperlandFarm"
+    DB_URL = "postgresql+asyncpg://postgres:long123@167.86.105.4:5432/HyperlandFarm"
     l_db = AsyncPostgresClient(DB_URL)
 
     l_FileKey = FileProcessing("key/key.xlsx")

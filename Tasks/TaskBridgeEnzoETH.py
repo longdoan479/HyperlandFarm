@@ -1,0 +1,32 @@
+import os
+from datetime import datetime
+
+from web3 import AsyncWeb3
+
+from CONSTANT import strLoggingPath, EnumStatusTask, gDictChainID, RPC, TokenContract
+from IncludeAsync.AccountEVM import AccountEVM
+from IncludeAsync.Database.AsyncPostgresClient import AsyncPostgresClient
+from Logging import Logging
+from Tasks.TaskBridgeToken import TaskBridgeToken
+
+
+class TaskBridgeEnzoETH(TaskBridgeToken):
+    def __init__(self, pWeb3: AsyncWeb3, pAccountEVM: AccountEVM, pDatabaseConn: AsyncPostgresClient):
+        super().__init__(pWeb3, pAccountEVM, pDatabaseConn)
+
+    async def Get_Token_Address(self, pChainID):
+        l_FilePath = os.getcwd() + strLoggingPath.format(
+            str(self.mAccountEVM.mGroup) + "_" + str(self.mAccountEVM.GetAddress()))
+        try:
+            chain_mapping = {
+                gDictChainID[RPC.OP_RPC]["chainID"]: TokenContract.OP.renzoETH,
+                gDictChainID[RPC.ARB_RPC]["chainID"]: TokenContract.OP.renzoETH,
+                gDictChainID[RPC.BASE_RPC]["chainID"]: TokenContract.OP.renzoETH,
+            }
+            if pChainID in chain_mapping:
+                return chain_mapping[pChainID]
+            raise Exception("ChainID not supported")
+        except Exception as e:
+            l_TextToLog = f'\n\n{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}: {self.__class__.__name__}.Get_Token_Address: {type(e).__name__} - {e}\n\n'
+            Logging.WriteLog(l_FilePath, l_TextToLog)
+
