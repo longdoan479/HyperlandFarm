@@ -55,13 +55,13 @@ class AsyncDoTask:
 
                         self.mDictAccTxnNumber[self.mListAccount[i].mAddress] = {}
                         self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["TargetTxnAmount"] = l_RandomTarget
-                        self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"] = False if l_DataWallet is None or l_RandomTarget < l_DataWallet.total_txn else True
+                        self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"] = False if l_DataWallet is None or l_RandomTarget > l_DataWallet.total_txn else True
                     else:
                         if self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"]:
                             continue
                         else:
                             if l_DataWallet is None or \
-                            self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["TargetTxnAmount"] < l_DataWallet.total_txn:
+                            self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["TargetTxnAmount"] > l_DataWallet.total_txn:
                                 self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"] = False
                             else:
                                 self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"] = True
@@ -119,17 +119,17 @@ class AsyncDoTask:
                     l_DataWallet = await self.GetDataWallet(self.mListAccount[i].mAddress)
 
                     if self.mListAccount[i].mAddress not in self.mDictAccTxnNumber:
-                        l_RandomTarget = random.randint(7, 10)
+                        l_RandomTarget = random.randint(5, 7)
 
                         self.mDictAccTxnNumber[self.mListAccount[i].mAddress] = {}
                         self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["TargetTxnAmount"] = l_RandomTarget
-                        self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"] = False if l_DataWallet is None or l_RandomTarget < l_DataWallet.total_txn else True
+                        self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"] = False if l_DataWallet is None or l_RandomTarget > l_DataWallet.total_txn else True
                     else:
                         if self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"]:
                             continue
                         else:
                             if l_DataWallet is None or \
-                            self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["TargetTxnAmount"] < l_DataWallet.total_txn:
+                            self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["TargetTxnAmount"] > l_DataWallet.total_txn:
                                 self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"] = False
                             else:
                                 self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"] = True
@@ -142,20 +142,22 @@ class AsyncDoTask:
                     ]
                     l_RoutePath = [l_rpc for l_rpc in l_RoutePath if l_rpc != l_RPC_From]
                     l_RPC_HaveBalance = await self.GetChainHaveBalance_FromListRPC(self.mListAccount[i], l_RoutePath, 0.001)
-                    l_RPC_To = random.choice(l_RPC_HaveBalance)
 
-                    l_ChainID_From = gDictChainID[l_RPC_From]["chainID"]
-                    l_ChainID_To = gDictChainID[l_RPC_To]["chainID"]
-                    async with aiohttp.ClientSession() as session:
-                        l_Web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(l_RPC_From, request_kwargs={'proxy': g_ProxyAddress}))
-                        await l_Web3.provider.cache_async_session(session=session)
-                        l_Account = AccountEVM(self.mListAccount[i].mPrivateKey, l_Web3, self.mListAccount[i].mGroup)
+                    if len(l_RPC_HaveBalance) > 0:
+                        l_RPC_To = random.choice(l_RPC_HaveBalance)
 
-                        l_TaskBridgeToken_UseNexus = TaskBridgeEnzoETH(l_Web3, l_Account, self.mDatabaseConn)
-                        l_ResultTask = await l_TaskBridgeToken_UseNexus.DoTask(l_ChainID_From, l_ChainID_To)
+                        l_ChainID_From = gDictChainID[l_RPC_From]["chainID"]
+                        l_ChainID_To = gDictChainID[l_RPC_To]["chainID"]
+                        async with aiohttp.ClientSession() as session:
+                            l_Web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(l_RPC_From, request_kwargs={'proxy': g_ProxyAddress}))
+                            await l_Web3.provider.cache_async_session(session=session)
+                            l_Account = AccountEVM(self.mListAccount[i].mPrivateKey, l_Web3, self.mListAccount[i].mGroup)
 
-                    l_IsAllAccReachTarget = all(wallet["IsDone"] == True for wallet in self.mDictAccTxnNumber.values())
-                    await asyncio.sleep(random.randint(20, 80))
+                            l_TaskBridgeToken_UseNexus = TaskBridgeEnzoETH(l_Web3, l_Account, self.mDatabaseConn)
+                            l_ResultTask = await l_TaskBridgeToken_UseNexus.DoTask(l_ChainID_From, l_ChainID_To)
+
+                        l_IsAllAccReachTarget = all(wallet["IsDone"] == True for wallet in self.mDictAccTxnNumber.values())
+                        await asyncio.sleep(random.randint(100, 300))
 
                 except Exception as e:
                     l_TextToLog = f'\n\n{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}: ThreadDoTask.HyperlandFarm_Bridge_renzoETH: {type(e).__name__} - {e}\n\n'
@@ -163,7 +165,7 @@ class AsyncDoTask:
                     print(f"{self.mThreadName}: =>")
                     traceback.print_exc()
 
-            l_RandomSleep = random.randint(900, 1800)
+            l_RandomSleep = random.randint(500, 3000)
             print(f"{self.mThreadName}: => Sleeping for {l_RandomSleep}s before next round")
             await asyncio.sleep(l_RandomSleep)
             random.shuffle(self.mListAccount)
