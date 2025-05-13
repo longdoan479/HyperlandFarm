@@ -118,22 +118,29 @@ class AsyncDoTask:
 
                     l_DataWallet = await self.GetDataWallet(self.mListAccount[i].mAddress)
 
-                    if self.mListAccount[i].mAddress not in self.mDictAccTxnNumber:
-                        l_RandomTarget = random.randint(5, 7)
+                    l_wallet_entry = self.mDictAccTxnNumber.get(self.mListAccount[i].mAddress)
 
-                        self.mDictAccTxnNumber[self.mListAccount[i].mAddress] = {}
-                        self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["TargetTxnAmount"] = l_RandomTarget
-                        self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"] = False if l_DataWallet is None or l_RandomTarget > l_DataWallet.total_txn else True
-                    else:
-                        if self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"]:
+                    # Check if wallet exists in dictionary
+                    if l_wallet_entry is None:
+                        # Initialize new wallet entry
+                        l_RandomTarget = random.randint(7, 9)
+                        l_is_complete = False if l_DataWallet is None or l_DataWallet.is_complete == 0 else True
+                        self.mDictAccTxnNumber[self.mListAccount[i].mAddress] = {
+                            "TargetTxnAmount": l_RandomTarget,
+                            "IsDone": l_is_complete
+                        }
+
+                        if l_is_complete:
                             continue
-                        else:
-                            if l_DataWallet is None or \
-                            self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["TargetTxnAmount"] > l_DataWallet.total_txn:
-                                self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"] = False
-                            else:
-                                self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"] = True
-                                continue
+                    else:
+                        # Skip if wallet is already marked as done
+                        if l_wallet_entry["IsDone"]:
+                            continue
+
+                        # Update IsDone status based on wallet data
+                        if l_DataWallet is not None and l_DataWallet.is_complete == 1:
+                            l_wallet_entry["IsDone"] = True
+                            continue
 
                     l_RoutePath = [
                         RPC.OP_RPC,
@@ -155,6 +162,12 @@ class AsyncDoTask:
 
                             l_TaskBridgeToken_UseNexus = TaskBridgeEnzoETH(l_Web3, l_Account, self.mDatabaseConn)
                             l_ResultTask = await l_TaskBridgeToken_UseNexus.DoTask(l_ChainID_From, l_ChainID_To)
+
+                            if l_ResultTask == EnumStatusTask.SUCCESS:
+                                l_DataWallet = await self.GetDataWallet(self.mListAccount[i].mAddress)
+
+                                if l_DataWallet is not None and self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["TargetTxnAmount"] <= l_DataWallet.total_txn:
+                                    await self.Update_IsComplete_Data_Wallet(self.mListAccount[i].mAddress)
 
                         l_IsAllAccReachTarget = all(wallet["IsDone"] == True for wallet in self.mDictAccTxnNumber.values())
                         await asyncio.sleep(random.randint(100, 300))
@@ -304,4 +317,10 @@ class AsyncDoTask:
                 return None
             else:
                 return l_Account
+
+    async def Update_IsComplete_Data_Wallet(self, pWalletAddress: ChecksumAddress):
+        async for session in self.mDatabaseConn.get_session():
+            l_WalletsRepo = WalletsRepository(session)
+            await l_WalletsRepo.upsert_wallet_stats(pWalletAddress, pIsComplete=1)
+
 
