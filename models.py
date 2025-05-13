@@ -32,6 +32,7 @@ class Wallets(Base):
     total_value: Mapped[decimal.Decimal] = mapped_column(Numeric(38, 18), server_default=text('0'))
     total_txn: Mapped[decimal.Decimal] = mapped_column(Numeric(38, 18), server_default=text('0'))
     total_interchain_fee: Mapped[decimal.Decimal] = mapped_column(Numeric(38, 18), server_default=text('0'))
+    is_complete: Mapped[decimal.Decimal] = mapped_column(Numeric, server_default=text('0'))
 
     transactions: Mapped[List['Transactions']] = relationship('Transactions', back_populates='wallets')
 
