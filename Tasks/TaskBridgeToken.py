@@ -1,5 +1,6 @@
 import decimal
 import os
+import random
 from datetime import datetime
 
 from web3 import AsyncWeb3
@@ -20,7 +21,7 @@ class TaskBridgeToken(BaseTask):
         super().__init__(pWeb3, pAccountEVM, pDatabaseConn)
 
 
-    async def DoTask(self, pChainID_From: int, pChainID_To: int):
+    async def DoTask(self, pChainID_From: int, pChainID_To: int, pPercentageAmount: float = 100):
         l_FilePath = os.getcwd() + strLoggingPath.format(
             str(self.mAccountEVM.mGroup) + "_" + str(self.mAccountEVM.GetAddress()))
         l_resultTask = EnumStatusTask.FAILED
@@ -36,7 +37,7 @@ class TaskBridgeToken(BaseTask):
                 l_BalanceToken = await l_Token.BalanceOf(self.mAccountEVM.GetAddress())
 
                 if l_BalanceToken > 0:
-                    l_AmountToBridge = l_BalanceToken / (10 ** gDictTokenDecimal[l_TokenAddress]["Decimal"])
+                    l_AmountToBridge = round((l_BalanceToken / (10 ** gDictTokenDecimal[l_TokenAddress]["Decimal"])) * pPercentageAmount / 100, random.randint(3, 6))
                     l_ContractToApprove = await l_UseNexus.GetBridgeTokenAddress(l_TokenAddress)
                     l_IsApprove = await self.ApproveToken(l_Token, l_ContractToApprove, l_AmountToBridge*2)
 
