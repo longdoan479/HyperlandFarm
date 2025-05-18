@@ -186,86 +186,102 @@ class AsyncDoTask:
             random.shuffle(self.mListAccount)
 
     async def HyperlandFarm_Bridge_HYPER_FromBSC(self):
-        l_IsAllAccReachTarget = False
-        while not l_IsAllAccReachTarget:
-            for i in range(0, len(self.mListAccount)):
-                self.mListAccount[i].mAddress = Web3.to_checksum_address(self.mListAccount[i].mAddress)
-                l_FilePath = os.getcwd() + strLoggingPath.format(
-                    str(self.mListAccount[i].mGroup) + "_" + str(self.mListAccount[i].mAddress))
-                try:
-                    l_RPC_From = await self.CheckBSC_HasBalnce_BNB_And_HYPER(self.mListAccount[i], 0.0014, 1)
+        try:
+            l_IsAllAccReachTarget = False
+            while not l_IsAllAccReachTarget:
+                for i in range(0, len(self.mListAccount)):
+                    self.mListAccount[i].mAddress = Web3.to_checksum_address(self.mListAccount[i].mAddress)
+                    l_FilePath = os.getcwd() + strLoggingPath.format(
+                        str(self.mListAccount[i].mGroup) + "_" + str(self.mListAccount[i].mAddress))
+                    try:
+                        l_RPC_From = await self.CheckBSC_HasBalnce_BNB_And_HYPER(self.mListAccount[i], 0.0014, 1)
 
-                    # if l_RPC_From == "" or l_RPC_From is None:
-                    #     continue
-                    print(f"{self.mThreadName}: Wallet {self.mListAccount[i].mAddress}, RPC {l_RPC_From}")
+                        # if l_RPC_From == "" or l_RPC_From is None:
+                        #     continue
+                        print(f"{self.mThreadName}: Wallet {self.mListAccount[i].mAddress}, RPC {l_RPC_From}")
 
-                    l_DataWallet = await self.GetDataWallet(self.mListAccount[i].mAddress)
+                        l_DataWallet = await self.GetDataWallet(self.mListAccount[i].mAddress)
 
-                    l_wallet_entry = self.mDictAccTxnNumber.get(self.mListAccount[i].mAddress)
+                        l_wallet_entry = self.mDictAccTxnNumber.get(self.mListAccount[i].mAddress)
 
-                    # Check if wallet exists in dictionary
-                    if l_wallet_entry is None:
-                        # Initialize new wallet entry
-                        l_RandomTarget = random.randint(9, 10)
-                        l_is_complete = False if (l_DataWallet is None
-                                                        or l_DataWallet.is_complete == 0)\
-                                                  and l_RPC_From != "" \
-                                            else True
-                        self.mDictAccTxnNumber[self.mListAccount[i].mAddress] = {
-                            "TargetTxnAmount": l_RandomTarget,
-                            "IsDone": l_is_complete
-                        }
+                        # Check if wallet exists in dictionary
+                        if l_wallet_entry is None:
+                            # Initialize new wallet entry
+                            l_RandomTarget = random.randint(9, 10)
 
-                        if l_is_complete:
-                            continue
-                    else:
-                        # Skip if wallet is already marked as done
-                        if l_wallet_entry["IsDone"]:
-                            continue
+                            # Determine if wallet is complete based on database status or lack of balance
+                            if l_DataWallet is not None and l_DataWallet.is_complete == 1:
+                                # Wallet is marked complete in database
+                                l_is_complete = True
+                            elif l_RPC_From == "":
+                                # No balance available, mark as complete to skip it
+                                l_is_complete = True
+                            else:
+                                # Has balance and not marked complete - needs processing
+                                l_is_complete = False
 
-                        # Update IsDone status based on wallet data
-                        if l_DataWallet is not None and l_DataWallet.is_complete == 1:
-                            l_wallet_entry["IsDone"] = True
-                            continue
+                            self.mDictAccTxnNumber[self.mListAccount[i].mAddress] = {
+                                "TargetTxnAmount": l_RandomTarget,
+                                "IsDone": l_is_complete
+                            }
 
-                    l_RoutePath = [
-                        RPC.OP_RPC,
-                        RPC.ARB_RPC,
-                        RPC.BASE_RPC,
-                    ]
-                    l_RoutePath = [l_rpc for l_rpc in l_RoutePath if l_rpc != l_RPC_From]
+                            if l_is_complete:
+                                continue
+                        else:
+                            # Skip if wallet is already marked as done
+                            if l_wallet_entry["IsDone"]:
+                                continue
 
-                    l_RPC_To = random.choice(l_RoutePath)
+                            # Update IsDone status based on wallet data
+                            if (l_DataWallet is not None and l_DataWallet.is_complete == 1) or l_RPC_From == "":
+                                l_wallet_entry["IsDone"] = True
+                                continue
 
-                    l_ChainID_From = gDictChainID[l_RPC_From]["chainID"]
-                    l_ChainID_To = gDictChainID[l_RPC_To]["chainID"]
-                    async with aiohttp.ClientSession() as session:
-                        l_Web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(l_RPC_From, request_kwargs={'proxy': g_ProxyAddress}))
-                        await l_Web3.provider.cache_async_session(session=session)
-                        l_Account = AccountEVM(self.mListAccount[i].mPrivateKey, l_Web3, self.mListAccount[i].mGroup)
+                        l_RoutePath = [
+                            RPC.OP_RPC,
+                            RPC.ARB_RPC,
+                            RPC.BASE_RPC,
+                        ]
+                        l_RoutePath = [l_rpc for l_rpc in l_RoutePath if l_rpc != l_RPC_From]
 
-                        l_TaskBridgeToken_UseNexus = TaskBridgeHYPER(l_Web3, l_Account, self.mDatabaseConn)
-                        l_ResultTask = await l_TaskBridgeToken_UseNexus.DoTask(l_ChainID_From, l_ChainID_To, random.randint(5, 10))
+                        l_RPC_To = random.choice(l_RoutePath)
 
-                        if l_ResultTask == EnumStatusTask.SUCCESS:
-                            l_DataWallet = await self.GetDataWallet(self.mListAccount[i].mAddress)
+                        l_ChainID_From = gDictChainID[l_RPC_From]["chainID"]
+                        l_ChainID_To = gDictChainID[l_RPC_To]["chainID"]
+                        async with aiohttp.ClientSession() as session:
+                            l_Web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(l_RPC_From, request_kwargs={'proxy': g_ProxyAddress}))
+                            await l_Web3.provider.cache_async_session(session=session)
+                            l_Account = AccountEVM(self.mListAccount[i].mPrivateKey, l_Web3, self.mListAccount[i].mGroup)
 
-                            if l_DataWallet is not None and self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["TargetTxnAmount"] <= l_DataWallet.total_txn:
-                                await self.Update_IsComplete_Data_Wallet(self.mListAccount[i].mAddress)
+                            l_TaskBridgeToken_UseNexus = TaskBridgeHYPER(l_Web3, l_Account, self.mDatabaseConn)
+                            l_ResultTask = await l_TaskBridgeToken_UseNexus.DoTask(l_ChainID_From, l_ChainID_To, random.randint(5, 10))
 
-                    l_IsAllAccReachTarget = all(wallet["IsDone"] == True for wallet in self.mDictAccTxnNumber.values())
-                    await asyncio.sleep(random.randint(100, 300))
+                            if l_ResultTask == EnumStatusTask.SUCCESS:
+                                l_DataWallet = await self.GetDataWallet(self.mListAccount[i].mAddress)
 
-                except Exception as e:
-                    l_TextToLog = f'\n\n{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}: ThreadDoTask.HyperlandFarm_Bridge_renzoETH: {type(e).__name__} - {e}\n\n'
-                    Logging.WriteLog(l_FilePath, l_TextToLog)
-                    print(f"{self.mThreadName}: =>")
-                    traceback.print_exc()
+                                if l_DataWallet is not None and self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["TargetTxnAmount"] <= l_DataWallet.total_txn:
+                                    await self.Update_IsComplete_Data_Wallet(self.mListAccount[i].mAddress)
+                        await asyncio.sleep(random.randint(100, 300))
 
-            l_RandomSleep = random.randint(500, 3000)
-            print(f"{self.mThreadName}: => Sleeping for {l_RandomSleep}s before next round")
-            await asyncio.sleep(l_RandomSleep)
-            random.shuffle(self.mListAccount)
+
+                    except Exception as e:
+                        l_TextToLog = f'\n\n{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}: ThreadDoTask.HyperlandFarm_Bridge_renzoETH: {type(e).__name__} - {e}\n\n'
+                        Logging.WriteLog(l_FilePath, l_TextToLog)
+                        print(f"{self.mThreadName}: =>")
+                        traceback.print_exc()
+
+                l_IsAllAccReachTarget = all(wallet["IsDone"] == True for wallet in self.mDictAccTxnNumber.values())
+                l_RandomSleep = random.randint(500, 3000)
+                print(f"{self.mThreadName}: => Sleeping for {l_RandomSleep}s before next round")
+                await asyncio.sleep(l_RandomSleep)
+                random.shuffle(self.mListAccount)
+
+        except Exception as e:
+            l_FilePath = os.getcwd() + "/unknown_error.txt"
+            l_TextToLog = f'\n\n{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}: ThreadDoTask.HyperlandFarm_Bridge_HYPER_FromBSC: {type(e).__name__} - {e}\n\n'
+            Logging.WriteLog(l_FilePath, l_TextToLog)
+            print(f"{self.mThreadName}: =>")
+            traceback.print_exc()
 
     async def GetChainHaveBalance(self, pWallet: DataWallet, pAmountRequired: float = 0.001):
         l_FilePath = os.getcwd() + strLoggingPath.format(
@@ -419,7 +435,7 @@ class AsyncDoTask:
                     AsyncWeb3.AsyncHTTPProvider(RPC.BSC_RPC, request_kwargs={'proxy': g_ProxyAddress}))
                 await l_web3_BSC.provider.cache_async_session(session=session)
                 l_bal_BSC = await l_web3_BSC.eth.get_balance(pWallet.mAddress)
-                if l_bal_BSC > pAmountRequired:
+                if Web3.from_wei(l_bal_BSC, "ether") > pAmountRequired:
                     l_Token_HYPER_BSC = TokenERC20(l_web3_BSC, TokenContract.BSC.HYPER)
                     l_Balance_HYPER_BSC = (await l_Token_HYPER_BSC.BalanceOf(pWallet.mAddress)) / (
                                 10 ** gDictTokenDecimal[TokenContract.BSC.HYPER]["Decimal"])
