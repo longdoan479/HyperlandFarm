@@ -21,6 +21,7 @@ from Repository.WalletsRepository import WalletsRepository
 from Tasks.TaskBridgeETH_UseNexus import TaskBridgeETH_UseNexus
 from Tasks.TaskBridgeEnzoETH import TaskBridgeEnzoETH
 from Tasks.TaskBridgeHYPER import TaskBridgeHYPER
+from Tasks.TaskTransferToken_MultiToOne import TaskTransferToken_MultiToOne
 
 
 class AsyncDoTask:
@@ -34,7 +35,8 @@ class AsyncDoTask:
         random.shuffle(self.mListAccount)
         # await self.HyperlandFarm_BridgeETH()
         # await self.HyperlandFarm_Bridge_renzoETH()
-        await self.HyperlandFarm_Bridge_HYPER_FromBSC()
+        # await self.HyperlandFarm_Bridge_HYPER_FromBSC()
+        await self.SendToken_From_Multi_To_One()
 
     async def HyperlandFarm_BridgeETH(self):
         l_IsAllAccReachTarget = False
@@ -194,7 +196,7 @@ class AsyncDoTask:
                     l_FilePath = os.getcwd() + strLoggingPath.format(
                         str(self.mListAccount[i].mGroup) + "_" + str(self.mListAccount[i].mAddress))
                     try:
-                        l_RPC_From = await self.CheckBSC_HasBalnce_BNB_And_HYPER(self.mListAccount[i], 0.0014, 1)
+                        l_RPC_From = await self.CheckBSC_HasBalnce_BNB_And_HYPER(self.mListAccount[i], 0.001, 1)
 
                         # if l_RPC_From == "" or l_RPC_From is None:
                         #     continue
@@ -216,6 +218,8 @@ class AsyncDoTask:
                             elif l_RPC_From == "":
                                 # No balance available, mark as complete to skip it
                                 l_is_complete = True
+                                await self.Update_IsComplete_Data_Wallet(self.mListAccount[i].mAddress)
+
                             else:
                                 # Has balance and not marked complete - needs processing
                                 l_is_complete = False
@@ -235,6 +239,7 @@ class AsyncDoTask:
                             # Update IsDone status based on wallet data
                             if (l_DataWallet is not None and l_DataWallet.is_complete == 1) or l_RPC_From == "":
                                 l_wallet_entry["IsDone"] = True
+                                await self.Update_IsComplete_Data_Wallet(self.mListAccount[i].mAddress)
                                 continue
 
                         l_RoutePath = [
@@ -254,13 +259,13 @@ class AsyncDoTask:
                             l_Account = AccountEVM(self.mListAccount[i].mPrivateKey, l_Web3, self.mListAccount[i].mGroup)
 
                             l_TaskBridgeToken_UseNexus = TaskBridgeHYPER(l_Web3, l_Account, self.mDatabaseConn)
-                            l_ResultTask = await l_TaskBridgeToken_UseNexus.DoTask(l_ChainID_From, l_ChainID_To, random.randint(5, 10))
+                            l_ResultTask = await l_TaskBridgeToken_UseNexus.DoTask(l_ChainID_From, l_ChainID_To, random.randint(1, 3))
 
-                            if l_ResultTask == EnumStatusTask.SUCCESS:
-                                l_DataWallet = await self.GetDataWallet(self.mListAccount[i].mAddress)
-
-                                if l_DataWallet is not None and self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["TargetTxnAmount"] <= l_DataWallet.total_txn:
-                                    await self.Update_IsComplete_Data_Wallet(self.mListAccount[i].mAddress)
+                            # if l_ResultTask == EnumStatusTask.SUCCESS:
+                            #     l_DataWallet = await self.GetDataWallet(self.mListAccount[i].mAddress)
+                            #
+                            #     if l_DataWallet is not None and self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["TargetTxnAmount"] <= l_DataWallet.total_txn:
+                            #         await self.Update_IsComplete_Data_Wallet(self.mListAccount[i].mAddress)
                         await asyncio.sleep(random.randint(100, 300))
 
 
@@ -466,5 +471,39 @@ class AsyncDoTask:
 
         return None
 
+    async def SendToken_From_Multi_To_One(self):
+        l_IsAllAccReachTarget = False
+        while not l_IsAllAccReachTarget:
+            for i in range(0, len(self.mListAccount)):
+                self.mListAccount[i].mAddress = Web3.to_checksum_address(self.mListAccount[i].mAddress)
+                l_FilePath = os.getcwd() + strLoggingPath.format(
+                    str(self.mListAccount[i].mGroup) + "_" + str(self.mListAccount[i].mAddress))
+                try:
+                    if self.mListAccount[i].mAddress not in self.mDictAccTxnNumber:
+                        self.mDictAccTxnNumber[self.mListAccount[i].mAddress] = {}
+                        self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"] = False
+
+                    if self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"]:
+                        continue
+
+                    print(f"{i}.{str(self.mListAccount[i].mAddress)}: {self.mThreadName}")
+
+                    async with aiohttp.ClientSession() as session:
+                        l_Web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(RPC.BASE_RPC, request_kwargs={'proxy': g_ProxyAddress}))
+                        await l_Web3.provider.cache_async_session(session=session)
+                        l_Account = AccountEVM(self.mListAccount[i].mPrivateKey, l_Web3, self.mListAccount[i].mGroup)
+
+                        l_TaskTransfer = TaskTransferToken_MultiToOne(l_Web3, l_Account)
+                        l_ResultTask = await l_TaskTransfer.DoTask()
+
+                        self.mDictAccTxnNumber[self.mListAccount[i].mAddress]["IsDone"] = True if l_ResultTask == EnumStatusTask.SUCCESS else False
+
+                except Exception as e:
+                    l_TextToLog = f'\n\n{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}: ThreadDoTask.SendToken_From_Multi_To_One: {type(e).__name__} - {e}\n\n'
+                    Logging.WriteLog(l_FilePath, l_TextToLog)
+                    print(f"{self.mThreadName}: =>")
+                    traceback.print_exc()
+
+            l_IsAllAccReachTarget = all(wallet["IsDone"] == True for wallet in self.mDictAccTxnNumber.values())
 
 
