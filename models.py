@@ -56,3 +56,31 @@ class Transactions(Base):
 
     chain: Mapped['ChainExplorers'] = relationship('ChainExplorers', back_populates='transactions')
     wallets: Mapped['Wallets'] = relationship('Wallets', back_populates='transactions')
+
+import asyncio
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import Integer, String
+
+
+# Hàm init DB (tạo bảng)
+async def init_db():
+    # 3. Tạo engine + session
+    username = ""
+    password = ""
+    ip = ""
+    DB_name = ""
+    DATABASE_URL = f"postgresql+asyncpg://{username}:{password}@{ip}:5432/{DB_name}"
+
+    engine = create_async_engine(DATABASE_URL, echo=True)
+    async with engine.begin() as conn:
+        # chạy sync function (create_all) trong môi trường async
+        await conn.run_sync(Base.metadata.create_all)
+
+
+
+async def main():
+    await init_db()     # tạo bảng
+
+if __name__ == "__main__":
+    asyncio.run(main())
