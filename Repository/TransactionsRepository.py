@@ -1,5 +1,5 @@
+import datetime
 import decimal
-from datetime import datetime
 
 from eth_typing import ChecksumAddress
 from sqlalchemy import select
@@ -18,7 +18,14 @@ class TransactionRepository:
         result = await self.mSession.execute(stmt)
         return result.scalars().first()
 
+    async def get_transaction_by_datetime(self, pStartDate: datetime.datetime, pEndDate: datetime.datetime, pWalletAddress: ChecksumAddress) -> list[Transactions] | None:
+        stmt = select(Transactions).where(
+            Transactions.wallet_address == pWalletAddress and pStartDate <= Transactions.txn_date <= pEndDate)
+        result = await self.mSession.execute(stmt)
+        return list(result.scalars().all())
+
     async def upsert_transaction_stats(self, pTxnHash: str, pWalletAddress: ChecksumAddress, pFee: decimal.Decimal, pValue: decimal.Decimal, pInterchainFee: decimal.Decimal, pChainID: int):
+        from datetime import datetime
         l_stmt = insert(Transactions).values(
             txn_hash=pTxnHash,
             wallet_address=pWalletAddress,

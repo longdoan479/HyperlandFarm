@@ -17,10 +17,12 @@ from IncludeAsync.AccountEVM import AccountEVM
 from IncludeAsync.Database.AsyncPostgresClient import AsyncPostgresClient
 from IncludeAsync.TokenERC20.TokenERC20 import TokenERC20
 from Logging import Logging
+from Repository.TransactionsRepository import TransactionRepository
 from Repository.WalletsRepository import WalletsRepository
 from Tasks.TaskBridgeETH_UseNexus import TaskBridgeETH_UseNexus
 from Tasks.TaskBridgeEnzoETH import TaskBridgeEnzoETH
 from Tasks.TaskBridgeHYPER import TaskBridgeHYPER
+from Tasks.TaskBridge_OUSDT import TaskBridge_OUSDT
 from Tasks.TaskTransferToken_MultiToOne import TaskTransferToken_MultiToOne
 
 
@@ -36,7 +38,8 @@ class AsyncDoTask:
         # await self.HyperlandFarm_BridgeETH()
         # await self.HyperlandFarm_Bridge_renzoETH()
         # await self.HyperlandFarm_Bridge_HYPER_FromBSC()
-        await self.SendToken_From_Multi_To_One()
+        await self.HyperlandFarm_Bridge_OUSDT()
+        # await self.SendToken_From_Multi_To_One()
 
     async def HyperlandFarm_BridgeETH(self):
         l_IsAllAccReachTarget = False
@@ -506,4 +509,175 @@ class AsyncDoTask:
 
             l_IsAllAccReachTarget = all(wallet["IsDone"] == True for wallet in self.mDictAccTxnNumber.values())
 
+    async def HyperlandFarm_Bridge_OUSDT(self):
+        l_IsAllAccReachTarget = False
+        l_OpenDay = None
+        l_IsBreak = False
+        while not l_IsAllAccReachTarget:
+            if l_IsBreak:
+                break
 
+            random.shuffle(self.mListAccount)
+            for i in range(0, len(self.mListAccount)):
+                if l_IsBreak:
+                    break
+                l_Now = datetime.now()
+                if l_OpenDay is None or l_Now.date() >= l_OpenDay.date():
+                    l_OpenDay = datetime(l_Now.year, l_Now.month, l_Now.day, 0, 0, 0)
+                    l_RandomTarget = random.randint(1, 2)
+
+                self.mListAccount[i].mAddress = Web3.to_checksum_address(self.mListAccount[i].mAddress)
+                l_FilePath = os.getcwd() + strLoggingPath.format(
+                    str(self.mListAccount[i].mGroup) + "_" + str(self.mListAccount[i].mAddress))
+                try:
+                    l_Txn_data = await self.QueryTransactionData_by_datatime(self.mListAccount[i].mAddress, l_OpenDay, l_Now)
+                    if l_Txn_data is not None and len(l_Txn_data) >= l_RandomTarget:
+                        continue
+
+
+                    l_RPC_From = await self.GetChainHaveETH_and_OUSDT(self.mListAccount[i])
+
+                    if l_RPC_From == "" or l_RPC_From is None:
+                        continue
+                    print(f"{self.mThreadName}: Wallet {self.mListAccount[i].mAddress}, RPC {l_RPC_From}")
+
+                    l_DataWallet = await self.GetDataWallet(self.mListAccount[i].mAddress)
+
+                    l_wallet_entry = self.mDictAccTxnNumber.get(self.mListAccount[i].mAddress)
+
+                    # Check if wallet exists in dictionary
+                    if l_wallet_entry is None:
+                        # Initialize new wallet entry
+                        l_is_complete = False if l_DataWallet is None or l_DataWallet.is_complete == 0 else True
+                        self.mDictAccTxnNumber[self.mListAccount[i].mAddress] = {
+                            "IsDone": l_is_complete
+                        }
+
+                        if l_is_complete:
+                            continue
+                    else:
+                        # Skip if wallet is already marked as done
+                        if l_wallet_entry["IsDone"]:
+                            continue
+
+                        # Update IsDone status based on wallet data
+                        if l_DataWallet is not None and l_DataWallet.is_complete == 1:
+                            l_wallet_entry["IsDone"] = True
+                            continue
+
+                    l_RoutePath = [
+                        RPC.OP_RPC,
+                        RPC.BASE_RPC,
+                    ]
+                    l_RoutePath = [l_rpc for l_rpc in l_RoutePath if l_rpc != l_RPC_From]
+                    l_RPC_HaveBalance = await self.GetChainHaveBalance_FromListRPC(self.mListAccount[i], l_RoutePath,
+                                                                                   0.001)
+
+                    if len(l_RPC_HaveBalance) > 0:
+                        l_RPC_To = random.choice(l_RPC_HaveBalance)
+
+                        l_ChainID_From = gDictChainID[l_RPC_From]["chainID"]
+                        l_ChainID_To = gDictChainID[l_RPC_To]["chainID"]
+                        async with aiohttp.ClientSession() as session:
+                            l_Web3 = AsyncWeb3(
+                                AsyncWeb3.AsyncHTTPProvider(l_RPC_From, request_kwargs={'proxy': g_ProxyAddress}))
+                            await l_Web3.provider.cache_async_session(session=session)
+                            l_Account = AccountEVM(self.mListAccount[i].mPrivateKey, l_Web3,
+                                                   self.mListAccount[i].mGroup)
+
+
+                            await asyncio.sleep(random.randint(20, 120))
+
+
+
+                            l_TaskBridgeToken_UseNexus = TaskBridge_OUSDT(l_Web3, l_Account, self.mDatabaseConn)
+                            l_ResultTask = await l_TaskBridgeToken_UseNexus.DoTask(l_ChainID_From, l_ChainID_To, float(round(random.uniform(20, 60), 3)))
+
+                            if l_ResultTask == EnumStatusTask.SUCCESS:
+                                pass
+                                # NOTE: Run until out of balance so i can not get the number of transaction
+                                # l_DataWallet = await self.GetDataWallet(self.mListAccount[i].mAddress)
+                                #
+                                # if l_DataWallet is not None and self.mDictAccTxnNumber[self.mListAccount[i].mAddress][
+                                #     "TargetTxnAmount"] <= l_DataWallet.total_txn:
+                                #     await self.Update_IsComplete_Data_Wallet(self.mListAccount[i].mAddress)
+
+                        l_IsAllAccReachTarget = all(
+                            wallet["IsDone"] == True for wallet in self.mDictAccTxnNumber.values())
+                        await asyncio.sleep(random.randint(300, 500))
+
+                except Exception as e:
+                    l_TextToLog = f'\n\n{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}: ThreadDoTask.HyperlandFarm_Bridge_renzoETH: {type(e).__name__} - {e}\n\n'
+                    Logging.WriteLog(l_FilePath, l_TextToLog)
+                    print(f"{self.mThreadName}: =>")
+                    traceback.print_exc()
+
+            l_RandomSleep = random.randint(500, 3000)
+            print(f"{self.mThreadName}: => Sleeping for {l_RandomSleep}s before next round")
+            await asyncio.sleep(l_RandomSleep)
+            random.shuffle(self.mListAccount)
+
+    async def QueryTransactionData_by_datatime(self, pWalletAddress: ChecksumAddress, pStartDate: datetime, pEndDate: datetime):
+        async for session in self.mDatabaseConn.get_session():
+            l_TransactionRepo = TransactionRepository(session)
+            l_Txn = await l_TransactionRepo.get_transaction_by_datetime(pStartDate, pEndDate, pWalletAddress)
+            if not l_Txn:
+                return None
+            else:
+                return l_Txn
+
+    async def GetChainHaveETH_and_OUSDT(self, pWallet: DataWallet, pAmountRequired: float = 0.00009, pAmountTokenRequired: float = 0.2):
+        l_FilePath = os.getcwd() + strLoggingPath.format(
+            str(pWallet.mGroup) + "_" + str(pWallet.mAddress))
+        l_Balance_OUSDT_Base = None
+        l_Balance_OUSDT_op = None
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                l_web3_Base = AsyncWeb3(
+                    AsyncWeb3.AsyncHTTPProvider(RPC.BASE_RPC, request_kwargs={'proxy': g_ProxyAddress}))
+                await l_web3_Base.provider.cache_async_session(session=session)
+                l_bal_base = await l_web3_Base.eth.get_balance(pWallet.mAddress)
+                if l_bal_base > pAmountRequired:
+                    l_Token_Base = TokenERC20(l_web3_Base, TokenContract.Base.OUSDT)
+                    l_Balance_OUSDT_Base = await l_Token_Base.BalanceOf(pWallet.mAddress, True)
+
+                l_web3_OP = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(RPC.OP_RPC, request_kwargs={'proxy': g_ProxyAddress}))
+                await l_web3_OP.provider.cache_async_session(session=session)
+                l_bal_OP = await l_web3_OP.eth.get_balance(pWallet.mAddress)
+                if l_bal_OP > pAmountRequired:
+                    l_Token_op = TokenERC20(l_web3_OP, TokenContract.OP.OUSDT)
+                    l_Balance_OUSDT_op = await l_Token_op.BalanceOf(pWallet.mAddress, True)
+
+                l_DictValue_Balance_ETH = {
+                    l_web3_Base: l_bal_base,
+                    l_web3_OP: l_bal_OP,
+                }
+
+                l_DictValue_Balance_Token = {
+                    l_web3_Base: l_Balance_OUSDT_Base or 0,
+                    l_web3_OP: l_Balance_OUSDT_op or 0,
+                }
+
+                # Get chains that meet both conditions
+                l_ValidChains = []
+                for web3_instance, token_balance in l_DictValue_Balance_Token.items():
+                    eth_balance = l_DictValue_Balance_ETH[web3_instance]
+                    if (token_balance > pAmountTokenRequired and
+                            Web3.from_wei(eth_balance, "ether") > pAmountRequired):
+                        l_ValidChains.append(web3_instance.provider.endpoint_uri)
+
+                # Return random choice from valid chains or empty string
+                if len(l_ValidChains) > 0:
+                    return random.choice(l_ValidChains)
+                else:
+                    return ""
+
+        except TimeoutError as t:
+            l_TextToLog = f'\n\n{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}: ThreadDoTask.GetChainHaveETH_and_OUSDT: TimeoutError\n\n'
+            Logging.WriteLog(l_FilePath, l_TextToLog)
+        except Exception as e:
+            l_TextToLog = f'\n\n{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}: ThreadDoTask.GetChainHaveETH_and_OUSDT: {type(e).__name__} - {e}\n\n'
+            Logging.WriteLog(l_FilePath, l_TextToLog)
+
+        return None

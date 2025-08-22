@@ -33,7 +33,6 @@ class TaskBridgeToken(BaseTask):
             if l_TokenAddress is not None:
                 l_UseNexus = UseNexus(self.mWeb3, self.mAccountEVM)
                 l_Token = TokenERC20(self.mWeb3, l_TokenAddress)
-
                 l_BalanceToken = await l_Token.BalanceOf(self.mAccountEVM.GetAddress())
 
                 if l_BalanceToken > 0:
@@ -42,6 +41,8 @@ class TaskBridgeToken(BaseTask):
                     l_IsApprove = await self.ApproveToken(l_Token, l_ContractToApprove, l_AmountToBridge*2)
 
                     if l_IsApprove:
+                        l_BalanceETH_Before = await self.mAccountEVM.GetBalanceETH(pIsConvertToEther=True)
+
                         l_TxnBridge, l_IsSuccessTXN, l_QuoteGasPayment, l_TxnFee = await l_UseNexus.BridgeToken(
                             l_TokenAddress,
                             l_AmountToBridge,
@@ -51,20 +52,21 @@ class TaskBridgeToken(BaseTask):
                         )
 
                         if l_IsSuccessTXN:
+                            l_BalanceETH_After = await self.mAccountEVM.GetBalanceETH(pIsConvertToEther=True)
+                            l_RealQuoteGas = l_BalanceETH_Before - l_BalanceETH_After - self.mWeb3.from_wei(l_TxnFee, "ether")
                             async for session in self.mDatabaseConn.get_session():
                                 l_WalletsRepo = WalletsRepository(session)
                                 await l_WalletsRepo.upsert_wallet_stats(self.mAccountEVM.GetAddress(),
-                                                                        self.mWeb3.from_wei(l_TxnFee, "ether"),
+                                                                        self.mWeb3.from_wei(l_TxnFee, "ether")+l_RealQuoteGas,
                                                                         decimal.Decimal(l_AmountToBridge),
-                                                                        self.mWeb3.from_wei(l_QuoteGasPayment, "ether"))
+                                                                        l_RealQuoteGas)
 
                                 l_TransactionRepo = TransactionRepository(session)
                                 await l_TransactionRepo.upsert_transaction_stats(l_TxnBridge,
                                                                                  self.mAccountEVM.GetAddress(),
-                                                                                 self.mWeb3.from_wei(l_GasPrice, "ether"),
+                                                                                 self.mWeb3.from_wei(l_TxnFee, "ether"),
                                                                                  decimal.Decimal(l_AmountToBridge),
-                                                                                 self.mWeb3.from_wei(l_QuoteGasPayment,
-                                                                                                     "ether"),
+                                                                                 l_RealQuoteGas,
                                                                                  await self.GetChainID())
 
                             l_TextToLog = f'\n{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}: {self.__class__.__name__} - Account {self.mAccountEVM.GetAddress()}:' \

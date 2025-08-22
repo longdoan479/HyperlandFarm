@@ -2,6 +2,7 @@ screen -S hyper
 cd EVM/HyperlandFarm
 export PYTHONPATH="/root/EVM/BaseLibraryWeb3/"
 
+apt install python3.12-venv
 python3.12 -m venv venv
 
 source venv/bin/activate  # Trên Linux/macOS

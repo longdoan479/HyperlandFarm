@@ -66,10 +66,10 @@ from sqlalchemy import Integer, String
 # Hàm init DB (tạo bảng)
 async def init_db():
     # 3. Tạo engine + session
-    username = ""
-    password = ""
-    ip = ""
-    DB_name = ""
+    username = "longdoan"
+    password = "long123456"
+    ip = "173.249.39.80"
+    DB_name = "hyperlandfarm"
     DATABASE_URL = f"postgresql+asyncpg://{username}:{password}@{ip}:5432/{DB_name}"
 
     engine = create_async_engine(DATABASE_URL, echo=True)
@@ -77,6 +77,25 @@ async def init_db():
         # chạy sync function (create_all) trong môi trường async
         await conn.run_sync(Base.metadata.create_all)
 
+    # tạo session để insert default data
+    SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+    async with SessionLocal() as session:
+        # check xem có dữ liệu chưa
+        result = await session.execute(text("SELECT COUNT(*) FROM chain_explorers"))
+        count = result.scalar()
+
+        if count == 0:  # chỉ insert khi bảng trống
+            default_data = [
+                ChainExplorers(chain_id=1, explorer_url="https://etherscan.io"),
+                ChainExplorers(chain_id=8453, explorer_url="https://basescan.org"),
+                ChainExplorers(chain_id=10, explorer_url="https://optimistic.etherscan.io/"),
+            ]
+            session.add_all(default_data)
+            await session.commit()
+            print("✅ Default data inserted")
+        else:
+            print("⚡ Data already exists")
 
 
 async def main():
