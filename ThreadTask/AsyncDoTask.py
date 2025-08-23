@@ -523,7 +523,7 @@ class AsyncDoTask:
                     break
                 l_Now = datetime.now()
                 if l_OpenDay is None or l_Now.date() >= l_OpenDay.date():
-                    l_OpenDay = datetime(l_Now.year, l_Now.month, l_Now.day, 0, 0, 0)
+                    l_OpenDay = datetime(l_Now.year, l_Now.month, l_Now.day, 0, 0, 0, 1)
                     l_RandomTarget = random.randint(1, 2)
 
                 self.mListAccount[i].mAddress = Web3.to_checksum_address(self.mListAccount[i].mAddress)

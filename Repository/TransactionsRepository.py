@@ -20,7 +20,7 @@ class TransactionRepository:
 
     async def get_transaction_by_datetime(self, pStartDate: datetime.datetime, pEndDate: datetime.datetime, pWalletAddress: ChecksumAddress) -> list[Transactions] | None:
         stmt = select(Transactions).where(
-            Transactions.wallet_address == pWalletAddress and pStartDate <= Transactions.txn_date <= pEndDate)
+            Transactions.wallet_address == pWalletAddress, pStartDate <= Transactions.txn_date, Transactions.txn_date <= pEndDate)
         result = await self.mSession.execute(stmt)
         return list(result.scalars().all())
 

@@ -71,7 +71,8 @@ class TaskBridgeToken(BaseTask):
 
                             l_TextToLog = f'\n{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}: {self.__class__.__name__} - Account {self.mAccountEVM.GetAddress()}:' \
                                           f'\n => Bridge from {pChainID_From} to {pChainID_To}\n' \
-                                          f'\n => {str(l_TxnBridge)}\n'
+                                          f'\n => {str(l_TxnBridge)}\n' \
+                                            f'\n => ETH before: {l_BalanceETH_Before}, ETH after: {l_BalanceETH_After}, QuoteGasPayment: {l_QuoteGasPayment}, RealGasPayment: {l_RealQuoteGas}, TxnFee: {self.mWeb3.from_wei(l_TxnFee, "ether")}\n'
                             Logging.WriteLog(l_FilePath, l_TextToLog)
                             l_resultTask = EnumStatusTask.SUCCESS
                         else:
